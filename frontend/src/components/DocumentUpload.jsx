@@ -1,12 +1,11 @@
 import { useState } from "react";
+import DocumentViewer from "./DocumentViewer";
 
 function DocumentUpload() {
-  const [file, setFile] = useState(null);
   const [content, setContent] = useState("");
 
   function handleFileChange(event) {
     const selectedFile = event.target.files[0];
-    setFile(selectedFile);
 
     if (selectedFile && selectedFile.type === "text/plain") {
       const reader = new FileReader();
@@ -24,10 +23,11 @@ function DocumentUpload() {
   return (
     <div>
       <input type="file" onChange={handleFileChange} />
+
       {content && (
         <div style={{ marginTop: "20px" }}>
-          <h3>Document content:</h3>
-          <pre>{content}</pre>
+          <h3>Document</h3>
+          <DocumentViewer text={content} />
         </div>
       )}
     </div>
