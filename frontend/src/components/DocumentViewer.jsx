@@ -1,15 +1,27 @@
 import { useState } from "react";
 
 function DocumentViewer({ text }) {
-  const [selectedText, setSelectedText] = useState("");
+  const [highlightedText, setHighlightedText] = useState(text);
+  const [lastSelection, setLastSelection] = useState("");
 
   function handleMouseUp() {
     const selection = window.getSelection();
-    const text = selection.toString();
+    const selected = selection.toString();
 
-    if (text.length > 0) {
-      setSelectedText(text);
-    }
+    if (!selected) return;
+
+    // Escape special characters for regex
+    const escaped = selected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    const highlighted = text.replace(
+      new RegExp(escaped, "g"),
+      `<mark>${selected}</mark>`
+    );
+
+    setHighlightedText(highlighted);
+    setLastSelection(selected);
+
+    selection.removeAllRanges();
   }
 
   return (
@@ -22,15 +34,13 @@ function DocumentViewer({ text }) {
           whiteSpace: "pre-wrap",
           cursor: "text"
         }}
-      >
-        {text}
-      </div>
+        dangerouslySetInnerHTML={{ __html: highlightedText }}
+      />
 
-      {selectedText && (
-        <div style={{ marginTop: "10px" }}>
-          <strong>Selected text:</strong>
-          <p>{selectedText}</p>
-        </div>
+      {lastSelection && (
+        <p>
+          <strong>Highlighted:</strong> {lastSelection}
+        </p>
       )}
     </div>
   );
