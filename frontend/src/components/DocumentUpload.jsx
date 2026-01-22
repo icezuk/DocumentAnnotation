@@ -2,28 +2,35 @@ import { useState } from "react";
 
 function DocumentUpload() {
   const [file, setFile] = useState(null);
+  const [content, setContent] = useState("");
 
   function handleFileChange(event) {
-    setFile(event.target.files[0]);
-  }
+    const selectedFile = event.target.files[0];
+    setFile(selectedFile);
 
-  function handleSubmit(event) {
-    event.preventDefault();
+    if (selectedFile && selectedFile.type === "text/plain") {
+      const reader = new FileReader();
 
-    if (!file) {
-      alert("Please select a file first");
-      return;
+      reader.onload = (e) => {
+        setContent(e.target.result);
+      };
+
+      reader.readAsText(selectedFile);
+    } else {
+      setContent("");
     }
-
-    alert(`Selected file: ${file.name}`);
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <div>
       <input type="file" onChange={handleFileChange} />
-      <br />
-      <button type="submit">Upload</button>
-    </form>
+      {content && (
+        <div style={{ marginTop: "20px" }}>
+          <h3>Document content:</h3>
+          <pre>{content}</pre>
+        </div>
+      )}
+    </div>
   );
 }
 
