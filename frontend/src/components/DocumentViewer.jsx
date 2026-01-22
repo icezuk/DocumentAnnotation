@@ -1,8 +1,14 @@
 import { useState } from "react";
 
+const LABELS = [
+  { name: "Person", color: "#ffd54f" },
+  { name: "Location", color: "#81d4fa" },
+  { name: "Organization", color: "#a5d6a7" }
+];
+
 function DocumentViewer({ text }) {
   const [highlightedText, setHighlightedText] = useState(text);
-  const [lastSelection, setLastSelection] = useState("");
+  const [selectedLabel, setSelectedLabel] = useState(LABELS[0]);
 
   function handleMouseUp() {
     const selection = window.getSelection();
@@ -10,25 +16,41 @@ function DocumentViewer({ text }) {
 
     if (!selected) return;
 
-    // Escape special characters for regex
     const escaped = selected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-    const highlighted = text.replace(
+    const highlighted = highlightedText.replace(
       new RegExp(escaped, "g"),
-      `<mark>${selected}</mark>`
+      `<span style="background-color:${selectedLabel.color}; padding:2px;">${selected}</span>`
     );
 
     setHighlightedText(highlighted);
-    setLastSelection(selected);
-
     selection.removeAllRanges();
   }
 
   return (
     <div>
+      <label>
+        Label:&nbsp;
+        <select
+          value={selectedLabel.name}
+          onChange={(e) =>
+            setSelectedLabel(
+              LABELS.find((l) => l.name === e.target.value)
+            )
+          }
+        >
+          {LABELS.map((label) => (
+            <option key={label.name} value={label.name}>
+              {label.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <div
         onMouseUp={handleMouseUp}
         style={{
+          marginTop: "10px",
           border: "1px solid #ccc",
           padding: "10px",
           whiteSpace: "pre-wrap",
@@ -36,12 +58,6 @@ function DocumentViewer({ text }) {
         }}
         dangerouslySetInnerHTML={{ __html: highlightedText }}
       />
-
-      {lastSelection && (
-        <p>
-          <strong>Highlighted:</strong> {lastSelection}
-        </p>
-      )}
     </div>
   );
 }
