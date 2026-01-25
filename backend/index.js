@@ -1,6 +1,20 @@
-const express = require("express");
+// new
+import labelsRoutes from "./routes/labels.routes.js";
+import documentsRoutes from "./routes/documents.routes.js";
+import express from "express";
+import path from "path";
+
+//const express = require("express");
 const app = express();
 
+// new
+app.use(express.json());
+app.use("/uploads", express.static("uploads"));
+
+app.use("/api/labels", labelsRoutes);
+app.use("/api/documents", documentsRoutes);
+
+// old
 app.get("/", (req, res) => {
   res.send("Annotation Tool Backend is running!");
 });
