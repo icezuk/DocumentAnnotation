@@ -13,6 +13,10 @@ export default function DocumentViewer({ text = "", labels = [], annotations = [
   const [html, setHtml] = useState("");
 
   useEffect(() => {
+    setHtml(escapeHtml(text));
+  }, [text]);
+
+  useEffect(() => {
     if (!labels.find(l => l.id === selectedLabelId)) {
       setSelectedLabelId(labels[0]?.id || "");
     }

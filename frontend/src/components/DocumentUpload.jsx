@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import DocumentViewer from "./DocumentViewer";
 import Sidebar from "./Sidebar";
+import { uploadDocument, fetchDocumentContent } from "../services/api";
 
 /* palette for suggested label colors */
 const LABEL_COLORS = [
@@ -14,6 +15,10 @@ function makeId(prefix = "") {
 
 export default function DocumentUpload() {
   const fileInputRef = useRef(null);
+
+  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
+  const [annotations, setAnnotations] = useState([]);
 
   // global labels (shared across documents)
   const [labels, setLabels] = useState(() => {
@@ -38,26 +43,33 @@ export default function DocumentUpload() {
   }
 
   // handle file load -> create new document
-  function handleFile(e) {
+  async function handleFile(e) {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const content = String(ev.target.result || "");
-      const docId = makeId("doc_");
+    try {
+      // upload to backend
+      const uploadResult = await uploadDocument(f);
+
+      // get content from backend
+      const contentResult = await fetchDocumentContent(uploadResult.id);
+
+      // create document object
       const newDoc = {
-        id: docId,
-        title: f.name,
-        text: content,
+        id: uploadResult.id,
+        title: uploadResult.title || f.name,
+        text: contentResult.content,
         annotations: []
       };
+
+      // add to documents + make active
       setDocuments(prev => [...prev, newDoc]);
-      setActiveDocId(docId);
-      // reset input so same file can be uploaded again if needed
-      e.target.value = "";
-    };
-    reader.readAsText(f);
+      setActiveDocId(newDoc.id);
+
+    } catch (err) {
+      console.error("Upload failed:", err);
+      alert("Failed to upload or load document.");
+    }
   }
 
   // add annotation to the active document (offset-based annotation object)
@@ -179,7 +191,7 @@ export default function DocumentUpload() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".txt"
+            accept=".txt,.pdf,.docx"
             onChange={handleFile}
             style={{ display: "none" }}
           />
@@ -210,7 +222,7 @@ export default function DocumentUpload() {
             />
           ) : (
             <div style={{ padding: 24, color: "#64748b" }}>
-              No document open — use “Add file” to open one.
+              Please upload a .txt, .pdf or .docx file to start annotating.
             </div>
           )}
         </div>

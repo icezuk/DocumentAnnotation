@@ -3,11 +3,13 @@ import labelsRoutes from "./routes/labels.routes.js";
 import documentsRoutes from "./routes/documents.routes.js";
 import express from "express";
 import path from "path";
+import cors from "cors";
 
 //const express = require("express");
 const app = express();
 
 // new
+app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static("uploads"));
 
