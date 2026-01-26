@@ -1,12 +1,21 @@
-import Home from "./pages/Home.jsx";
+import React from "react";
+import DocumentUpload from "./components/DocumentUpload";
 
-function App() {
+export default function App() {
   return (
-    <div>
-      <h1>Document Annotation Tool</h1>
-      <Home />
+    <div className="app">
+      <header className="app-header">
+        <h1>Document Annotation Tool</h1>
+        <div className="app-meta">Frontend — responsive & labels</div>
+      </header>
+
+      <div className="app-body">
+        <div className="app-container">
+          <DocumentUpload />
+        </div>
+      </div>
+
+      <footer className="app-footer">Course project — frontend demo</footer>
     </div>
   );
 }
-
-export default App;

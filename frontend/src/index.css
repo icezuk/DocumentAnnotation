@@ -1,0 +1,365 @@
+:root {
+  --bg: #f6f8fb;
+  --card: #ffffff;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --accent-600: #1e40af;
+  --accent-100: #eef2ff;
+  --radius: 10px;
+  --sidebar-width: 320px;
+  --header-h: 64px;
+  --footer-h: 36px;
+  --gap: 16px;
+  --max-content-width: 1200px;
+  --shadow: 0 8px 30px rgba(12, 18, 30, 0.06);
+  --green: #16a34a;
+}
+
+/* base */
+* {
+  box-sizing: border-box
+}
+
+html,
+body,
+#root {
+  height: 100%
+}
+
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background: var(--bg);
+  color: #0b1220;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* layout */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh
+}
+
+.app-header {
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  background: linear-gradient(90deg, #fff, #fbfdff);
+  border-bottom: 1px solid #e6e9ef;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 18px
+}
+
+.app-meta {
+  color: var(--muted);
+  font-size: 13px;
+  margin-left: auto
+}
+
+.app-body {
+  display: flex;
+  gap: var(--gap);
+  padding: var(--gap);
+  justify-content: center
+}
+
+.app-container {
+  width: 100%;
+  max-width: var(--max-content-width);
+  display: flex;
+  gap: var(--gap);
+  align-items: stretch
+}
+
+/* sidebar */
+.sidebar {
+  width: var(--sidebar-width);
+  min-width: 220px;
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: calc(100vh - var(--header-h) - var(--footer-h) - 40px);
+  overflow: auto;
+}
+
+/* main */
+.main {
+  flex: 1;
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: 0 8px 30px rgba(12, 18, 30, 0.04);
+  min-height: calc(100vh - var(--header-h) - var(--footer-h) - 40px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column
+}
+
+/* upload */
+.upload-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px
+}
+
+.upload-controls input[type="file"] {
+  padding: 6px;
+}
+
+
+/* viewer controls */
+.viewer-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px
+}
+
+.label-select {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #e6e9ef;
+  background: white;
+  font-size: 14px;
+  min-width: 160px;
+  box-shadow: 0 1px 0 rgba(8, 10, 15, 0.02)
+}
+
+.label-select:focus {
+  outline: 3px solid rgba(37, 99, 235, 0.12);
+  border-color: var(--accent-600)
+}
+
+/* nice buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+  background: transparent;
+  color: var(--accent-600);
+}
+
+.btn:hover {
+  filter: brightness(.95)
+}
+
+.btn:active {
+  transform: translateY(1px)
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--accent), var(--accent-600));
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.12)
+}
+
+.btn-ghost {
+  background: transparent;
+  color: #334155;
+  border: 1px solid #e6e9ef
+}
+
+.btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+  transform: none
+}
+
+/* viewer */
+.viewer {
+  flex: 1;
+  border-radius: 8px;
+  border: 1px solid #eef2f6;
+  padding: 14px;
+  overflow: auto;
+  background: linear-gradient(180deg, #fff, #fbfdff)
+}
+
+.document-content {
+  white-space: pre-wrap;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto;
+  line-height: 1.45;
+  font-size: 14px;
+  color: #0b1220
+}
+
+/* annotation */
+.annotation {
+  border-radius: 6px;
+  padding: 2px 4px;
+  display: inline;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* labels list */
+.labels-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px
+}
+
+.label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px;
+  border-radius: 10px
+}
+
+.label-row .left {
+  display: flex;
+  align-items: center;
+  gap: 8px
+}
+
+.swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.06)
+}
+
+.label-name {
+  font-weight: 600;
+  font-size: 14px
+}
+
+.label-count {
+  font-size: 13px;
+  color: var(--muted)
+}
+
+/* add label */
+.add-label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px
+}
+
+.add-label input[type="text"] {
+  flex: 1;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid #e6e9ef
+}
+
+.add-label input[type="color"] {
+  width: 44px;
+  height: 36px;
+  border-radius: 8px;
+  padding: 3px;
+  border: 1px solid #e6e9ef;
+  background: white
+}
+
+.add-label .btn {
+  padding: 8px 12px;
+  border-radius: 10px
+}
+
+/* label-group highlights */
+.label-group {
+  margin-top: 12px;
+  border-top: 1px dashed #f0f3f8;
+  padding-top: 10px
+}
+
+.label-group h4 {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px
+}
+
+.label-group ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px
+}
+
+.label-group li {
+  font-size: 13px;
+  color: #16324f
+}
+
+.link-like {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+  text-align: left
+}
+
+/* small helpers */
+.empty-note {
+  color: var(--muted);
+  font-size: 13px
+}
+
+.muted {
+  color: #8892a6;
+  font-size: 13px
+}
+
+/* footer */
+.app-footer {
+  height: var(--footer-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 13px;
+  border-top: 1px solid #e6e9ef
+}
+
+/* responsive */
+@media (max-width: 980px) {
+  .app-body {
+    padding: 12px
+  }
+
+  .app-container {
+    flex-direction: column;
+    padding: 0
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    max-height: 40vh;
+    order: 2
+  }
+
+  .main {
+    order: 1;
+    min-height: 50vh
+  }
+}
