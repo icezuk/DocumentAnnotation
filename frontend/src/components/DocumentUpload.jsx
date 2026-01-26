@@ -2,11 +2,21 @@ import React, { useState } from "react";
 import DocumentViewer from "./DocumentViewer";
 import Sidebar from "./Sidebar";
 
+/* palette for suggested colors */
+const LABEL_COLORS = [
+  "#2563eb", "#16a34a", "#dc2626", "#7c3aed",
+  "#ea580c", "#0891b2", "#ca8a04", "#db2777",
+];
+
 export default function DocumentUpload() {
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
-  const [labels, setLabels] = useState([]);
-  const [annotations, setAnnotations] = useState([]);
+  const [labels, setLabels] = useState([]); // {id,name,color}
+  const [annotations, setAnnotations] = useState([]); // {id,start,end,text,label,color}
+
+  function getNextLabelColor() {
+    return LABEL_COLORS[labels.length % LABEL_COLORS.length];
+  }
 
   function handleFile(e) {
     const f = e.target.files && e.target.files[0];
@@ -16,7 +26,9 @@ export default function DocumentUpload() {
 
     const reader = new FileReader();
     reader.onload = (ev) => {
-      setText(String(ev.target.result || ""));
+      const content = String(ev.target.result || "");
+      setText(content);
+      // reset per-document state
       setLabels([]);
       setAnnotations([]);
     };
@@ -24,15 +36,25 @@ export default function DocumentUpload() {
   }
 
   function handleAddAnnotation(a) {
+    // a = { start, end, text, label, color, id }
     if (a && a.__reset) {
       setAnnotations([]);
       return;
     }
-    setAnnotations((prev) => [...prev, a]);
+    // prevent overlap with existing annotations
+    const overlap = annotations.some((an) => !(a.end <= an.start || a.start >= an.end));
+    if (overlap) {
+      alert("This selection overlaps an existing annotation. Please select a non-overlapping range.");
+      return;
+    }
+    setAnnotations((prev) => [...prev, a].sort((x, y) => x.start - y.start));
   }
 
   function handleAddLabel(l) {
-    setLabels((prev) => [...prev, l]);
+    // l should be { id, name, color? }
+    const color = l.color || getNextLabelColor();
+    const labelObj = { ...l, color };
+    setLabels((prev) => [...prev, labelObj]);
   }
 
   function handleScrollToAnnotation(id) {
@@ -69,6 +91,7 @@ export default function DocumentUpload() {
             annotations={annotations}
             onAddLabel={handleAddLabel}
             onScrollToAnnotation={handleScrollToAnnotation}
+            suggestedColor={getNextLabelColor()}
           />
         </div>
       </div>
