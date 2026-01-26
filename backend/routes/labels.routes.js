@@ -1,5 +1,4 @@
 import express from "express";
-import { labels } from "../data/labels.mock.js";
 
 const router = express.Router();
 

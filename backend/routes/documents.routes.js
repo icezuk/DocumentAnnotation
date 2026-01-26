@@ -1,14 +1,20 @@
 import express from "express";
 import multer from "multer";
+import pdfParse from "pdf-parse";
+import mammoth from "mammoth";
+import fs from "fs";
 import path from "path";
-import { documents } from "../data/documents.mock.js";
+import { db } from "../db.js";
 
 const router = express.Router();
 
-// Storage config
+/* =========================
+   MULTER CONFIGURATION
+========================= */
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/");
+    cb(null, "uploads/original/");
   },
   filename: (req, file, cb) => {
     const uniqueName = Date.now() + "-" + file.originalname;
@@ -16,37 +22,109 @@ const storage = multer.diskStorage({
   }
 });
 
-// File filter
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = ["txt", "pdf", "docx"];
-  const ext = path.extname(file.originalname).substring(1);
-  if (allowedTypes.includes(ext)) {
+  const allowedExtensions = ["txt", "pdf", "docx"];
+  const ext = path.extname(file.originalname).substring(1).toLowerCase();
+
+  if (allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error("Invalid file type"));
+    cb(new Error("Unsupported file type"));
   }
 };
 
 const upload = multer({ storage, fileFilter });
 
-// Upload endpoint
-router.post("/upload", upload.single("file"), (req, res) => {
-  const file = req.file;
+/* =========================
+   GET ALL DOCUMENTS
+========================= */
+router.get("/", async (req, res) => {
+  try {
+    const [rows] = await db.query("SELECT * FROM documents");
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Database error" });
+  }
+});
 
-  if (!file) {
-    return res.status(400).json({ message: "No file uploaded" });
+/* =========================
+   UPLOAD DOCUMENT
+========================= */
+router.post("/upload", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const { originalname, filename } = req.file;
+    const fileType = path.extname(originalname).substring(1).toLowerCase();
+
+    let extractedContent = "";
+
+    // Read content (for now only for .txt files)
+    const filePath = path.join("uploads", "original", filename);
+
+    if (fileType === "txt") {
+      extractedContent = fs.readFileSync(filePath, "utf-8");
+
+    } else if (fileType === "pdf") {
+      const dataBuffer = fs.readFileSync(filePath);
+      const pdfData = await pdfParse(dataBuffer);
+      extractedContent = pdfData.text;
+      // clear the text from empty rows and unnecessary intervals
+      extractedContent = extractedContent.replace(/\s+\n/g, "\n").trim();
+
+    } else if (fileType === "docx") {
+      const result = await mammoth.extractRawText({ path: filePath });
+      extractedContent = result.value;
+
+    } else {
+      return res.status(400).json({
+        message: "Unsupported file type"
+      });
+    }
+
+    // check if there is extracted text
+    if (!extractedContent || extractedContent.trim().length === 0) {
+      return res.status(400).json({
+        message: "No readable text could be extracted from the document"
+      });
+    }
+
+    // Insert into the DB
+    const [result] = await db.query(
+      `INSERT INTO documents (title, content, file_type)
+       VALUES (?, ?, ?)`,
+      [originalname, extractedContent, fileType]
+    );
+
+    res.status(201).json({
+      id: result.insertId,
+      title: originalname,
+      fileType
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error uploading document" });
+  }
+});
+
+/* =========================
+   GET DOCUMENT CONTENT 
+========================= */
+router.get("/:id/content", async (req, res) => {
+  const [rows] = await db.query(
+    "SELECT content FROM documents WHERE id = ?",
+    [req.params.id]
+  );
+
+  if (rows.length === 0) {
+    return res.status(404).json({ message: "Document not found" });
   }
 
-  const newDocument = {
-    id: documents.length + 1,
-    originalName: file.originalname,
-    filename: file.filename,
-    type: path.extname(file.originalname).substring(1)
-  };
-
-  documents.push(newDocument);
-
-  res.status(201).json(newDocument);
+  res.json({ content: rows[0].content });
 });
 
 export default router;
