@@ -25,13 +25,11 @@ export default function DocumentViewer({ text = "", labels = [], annotations = [
       return;
     }
 
-    // ensure sorted by start
     const anns = [...annotations].sort((a, b) => a.start - b.start);
     let out = "";
     let cursor = 0;
 
     anns.forEach(a => {
-      // guard: clamp ranges inside text
       const s = Math.max(0, Math.min(a.start, text.length));
       const e = Math.max(0, Math.min(a.end, text.length));
       if (cursor < s) {
@@ -60,7 +58,6 @@ export default function DocumentViewer({ text = "", labels = [], annotations = [
       }
       charCount += n.textContent.length;
     }
-    // fallback: total length
     return charCount;
   }
 
@@ -87,7 +84,6 @@ export default function DocumentViewer({ text = "", labels = [], annotations = [
     const endNode = range.endContainer;
     const endOffset = range.endOffset;
 
-    // compute character offsets relative to the original rendered plain text (containerRef)
     const startChar = getCharOffsetWithin(startNode, startOffset);
     const endChar = getCharOffsetWithin(endNode, endOffset);
 
@@ -95,7 +91,6 @@ export default function DocumentViewer({ text = "", labels = [], annotations = [
     let e = Math.max(startChar, endChar);
 
     if (s === e) { sel.removeAllRanges(); return; }
-    // clamp
     s = Math.max(0, Math.min(s, text.length));
     e = Math.max(0, Math.min(e, text.length));
 
@@ -121,7 +116,6 @@ export default function DocumentViewer({ text = "", labels = [], annotations = [
     sel.removeAllRanges();
   }
 
-  // export helper: export annotations (offset-based)
   function exportAnnotations() {
     const data = annotations.map(a => ({ id: a.id, start: a.start, end: a.end, text: a.text, label: a.label, color: a.color }));
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
