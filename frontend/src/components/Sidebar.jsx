@@ -22,7 +22,8 @@ export default function Sidebar({
   allAnnotations = [],
   labelHierarchy = [],
   onAddChild,
-  userId,
+  onEditLabel,
+  onDeleteLabel,
   isHierarchyLoading = false
 }) {
   const [name, setName] = useState("");
@@ -83,6 +84,20 @@ export default function Sidebar({
     }
     setExpandedNodes(newExpanded);
   }
+
+  const iconBtnStyle = {
+    background: "none",
+    border: "1px solid #cbd5e1",
+    borderRadius: 4,
+    cursor: "pointer",
+    padding: "2px 6px",
+    fontSize: 12,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 22,
+    height: 22
+  };
 
   // Render a single label node in the hierarchy
   function renderLabelNode(label, level = 0) {
@@ -158,39 +173,45 @@ export default function Sidebar({
             )}
           </div>
 
-          {/* Add child button */}
-          {onAddChild && (
-            <button
-              onClick={() => onAddChild(label)}
-              style={{
-                background: "none",
-                border: "1px solid #cbd5e1",
-                borderRadius: 3,
-                cursor: "pointer",
-                padding: "2px 6px",
-                color: "#475569",
-                fontSize: 12,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 20,
-                height: 20,
-                flexShrink: 0,
-                transition: "all 0.2s"
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#e2e8f0";
-                e.currentTarget.style.color = "#1e293b";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "none";
-                e.currentTarget.style.color = "#475569";
-              }}
-              title={`Add child label to ${label.name}`}
-            >
-              +
-            </button>
-          )}
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: 4 }}>
+            {/* Add child */}
+            {onAddChild && (
+              <button
+                onClick={() => onAddChild(label)}
+                title="Add child label"
+                style={iconBtnStyle}
+              >
+                +
+              </button>
+            )}
+
+            {/* Edit label */}
+            {onEditLabel && (
+              <button
+                onClick={() => onEditLabel(label)}
+                title="Edit label"
+                style={iconBtnStyle}
+              >
+                ✏️
+              </button>
+            )}
+
+            {/* Delete label */}
+            {onDeleteLabel && (
+              <button
+                onClick={() => {
+                  if (confirm(`Delete label "${label.name}" and ALL its children?`)) {
+                    onDeleteLabel(label);
+                  }
+                }}
+                title="Delete label"
+                style={{ ...iconBtnStyle, color: "#dc2626" }}
+              >
+                🗑️
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Expanded content: children and annotations */}

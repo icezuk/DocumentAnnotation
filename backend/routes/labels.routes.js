@@ -9,6 +9,7 @@ import {
   getAllRootLabels,
   getPathToRoot
 } from "../labelHierarchy.js";
+import { deleteLabelRecursively } from "../labelHierarchy.js";
 import { authMiddleware } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
@@ -203,5 +204,58 @@ router.get("/", authMiddleware, async (req, res) => {
     res.status(500).json({ message: "Error fetching labels", error: err.message });
   }
 });
+
+/* =========================
+   UPDATE LABEL
+========================= */
+router.put("/:id", authMiddleware, async (req, res) => {
+  try {
+    const labelId = parseInt(req.params.id);
+    const userId = req.user.id;
+    const { name, color } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ message: "Label name is required" });
+    }
+
+    // check ownership
+    const [[label]] = await db.query(
+      "SELECT id FROM labels WHERE id = ? AND user_id = ?",
+      [labelId, userId]
+    );
+
+    if (!label) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
+
+    await db.query(
+      "UPDATE labels SET name = ?, color = ? WHERE id = ?",
+      [name, color || null, labelId]
+    );
+
+    res.json({ id: labelId, name, color });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to update label" });
+  }
+});
+
+/* =========================
+   DELETE LABEL RECURSIVELY
+========================= */
+router.delete("/:id", authMiddleware, async (req, res) => {
+  try {
+    const labelId = parseInt(req.params.id);
+    const userId = req.user.id;
+
+    await deleteLabelRecursively(labelId, userId);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ message: err.message });
+  }
+});
+
 
 export default router;

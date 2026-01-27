@@ -8,7 +8,7 @@ import React, { useState } from "react";
  *   - onAddChild: fn(parentLabel) - callback when + is clicked
  *   - userId: number - current user ID
  */
-function LabelNode({ label, level = 0, onAddChild, userId }) {
+function LabelNode({ label, level = 0, onAddChild, onEditLabel, onDeleteLabel }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const hasChildren = label.children && label.children.length > 0;
   const indent = level * 24; // 24px per level
@@ -67,6 +67,43 @@ function LabelNode({ label, level = 0, onAddChild, userId }) {
         <div style={{ flex: 1, fontWeight: 500, color: "#1e293b", fontSize: 14 }}>
           {label.name}
         </div>
+
+        {/* Edit */}
+        <button
+          onClick={() => onEditLabel && onEditLabel(label)}
+          title="Edit label"
+          style={{
+            background: "none",
+            border: "1px solid #cbd5e1",
+            borderRadius: 4,
+            cursor: "pointer",
+            width: 28,
+            height: 28
+          }}
+        >
+          ✏️
+        </button>
+
+        {/* Delete */}
+        <button
+          onClick={() => {
+            if (confirm(`Delete "${label.name}" and all its children?`)) {
+              onDeleteLabel && onDeleteLabel(label);
+            }
+          }}
+          title="Delete label"
+          style={{
+            background: "none",
+            border: "1px solid #fecaca",
+            borderRadius: 4,
+            cursor: "pointer",
+            width: 28,
+            height: 28,
+            color: "#dc2626"
+          }}
+        >
+          🗑️
+        </button>
 
         {/* Add child button */}
         <button
@@ -130,7 +167,8 @@ function LabelNode({ label, level = 0, onAddChild, userId }) {
 export default function LabelHierarchyTree({
   labelHierarchy = [],
   onAddChild,
-  userId,
+  onEditLabel,
+  onDeleteLabel,
   isLoading = false
 }) {
   if (isLoading) {
@@ -161,7 +199,8 @@ export default function LabelHierarchyTree({
             label={label}
             level={0}
             onAddChild={onAddChild}
-            userId={userId}
+            onEditLabel={onEditLabel}
+            onDeleteLabel={onDeleteLabel}
           />
         ))}
       </div>

@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { fetchMyDocuments } from "../services/api";
 import { fetchLabelHierarchy, createChildLabel, createLabel } from "../services/labelHierarchyAPI";
 import { fetchAnnotationsForDocument, createAnnotation } from "../services/annotationsAPI";
+import { updateLabel, deleteLabel } from "../services/labelHierarchyAPI";
 
 /* palette for suggested label colors */
 const LABEL_COLORS = [
@@ -377,6 +378,31 @@ export default function DocumentUpload() {
     }
   }
 
+  async function handleEditLabel(label) {
+    const newName = prompt("New label name:", label.name);
+    if (!newName) return;
+
+    try {
+      await updateLabel(label.id, newName, label.color, token);
+      const hierarchy = await fetchLabelHierarchy(token);
+      setLabelHierarchy(hierarchy);
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    }
+  }
+
+  async function handleDeleteLabel(label) {
+    try {
+      await deleteLabel(label.id, token);
+      const hierarchy = await fetchLabelHierarchy(token);
+      setLabelHierarchy(hierarchy);
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    }
+  }
+
   // Helper to check if label exists in hierarchy tree
   function labelExists(labelNode, nameToFind) {
     if (labelNode.name.toLowerCase() === nameToFind) return true;
@@ -608,7 +634,8 @@ export default function DocumentUpload() {
           }}
           labelHierarchy={labelHierarchy}
           onAddChild={handleAddChildClick}
-
+          onEditLabel={handleEditLabel}
+          onDeleteLabel={handleDeleteLabel}
           isHierarchyLoading={isHierarchyLoading}
         />
 

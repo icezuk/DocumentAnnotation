@@ -74,3 +74,34 @@ export async function createChildLabel(parentId, data, token) {
 
   return newLabel;
 }
+
+/**
+ * Update label
+ */
+export async function updateLabel(id, name, color, token) {
+  const res = await fetch(`${BASE_URL}/labels/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ name, color })
+  });
+
+  if (!res.ok) throw new Error("Failed to update label");
+  return res.json();
+}
+
+/**
+ * Delete label
+ */
+export async function deleteLabel(id, token) {
+  const res = await fetch(`${BASE_URL}/labels/${id}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!res.ok) throw new Error("Failed to delete label");
+}

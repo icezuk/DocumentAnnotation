@@ -282,3 +282,34 @@ export async function getPathToRoot(labelId, userId) {
     throw new Error(`Error getting path to root: ${err.message}`);
   }
 }
+
+// helper to delete label + children
+export async function deleteLabelRecursively(labelId, userId) {
+  // verify ownership
+  const [[label]] = await db.query(
+    "SELECT id FROM labels WHERE id = ? AND user_id = ?",
+    [labelId, userId]
+  );
+  if (!label) throw new Error("Unauthorized");
+
+  // get children
+  const children = await getDirectChildren(labelId);
+
+  // delete children first
+  for (const childId of children) {
+    await deleteLabelRecursively(childId, userId);
+  }
+
+  // remove relations
+  await db.query(
+    "DELETE FROM label_relations WHERE from_label_id = ? OR to_label_id = ?",
+    [labelId, labelId]
+  );
+
+  // delete label
+  await db.query(
+    "DELETE FROM labels WHERE id = ?",
+    [labelId]
+  );
+}
+
