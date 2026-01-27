@@ -3,6 +3,7 @@ import labelsRoutes from "./routes/labels.routes.js";
 import documentsRoutes from "./routes/documents.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import annotationsRoutes from "./routes/annotations.routes.js";
+import analyticsRoutes from "./routes/analytics.routes.js";
 import express from "express";
 import path from "path";
 import cors from "cors";
@@ -19,6 +20,7 @@ app.use("/uploads", express.static("uploads"));
 app.use("/api/labels", labelsRoutes);
 app.use("/api/documents", documentsRoutes);
 app.use("/api/annotations", annotationsRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 // old
 app.get("/", (req, res) => {
