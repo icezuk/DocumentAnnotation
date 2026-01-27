@@ -155,4 +155,39 @@ router.get("/:id/content", authMiddleware, async (req, res) => {
   res.json({ content: rows[0].content });
 });
 
+/* =========================
+   DELETE DOCUMENT 
+========================= */
+router.delete("/:id", authMiddleware, async (req, res) => {
+  const userId = req.user.id;
+  const docId = req.params.id;
+
+  try {
+    // First verify the document belongs to this user
+    const [rows] = await db.query(
+      "SELECT id FROM documents WHERE id = ? AND user_id = ?",
+      [docId, userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Document not found" });
+    }
+
+    // Delete the document (annotations will cascade delete via foreign key)
+    const [result] = await db.query(
+      "DELETE FROM documents WHERE id = ? AND user_id = ?",
+      [docId, userId]
+    );
+
+    if (result.affectedRows > 0) {
+      res.json({ message: "Document deleted successfully" });
+    } else {
+      res.status(500).json({ message: "Failed to delete document" });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error deleting document" });
+  }
+});
+
 export default router;

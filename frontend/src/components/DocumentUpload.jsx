@@ -6,6 +6,7 @@ import { uploadDocument, fetchDocumentContent } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { fetchMyDocuments } from "../services/api";
 import { fetchLabelHierarchy, createChildLabel, createLabel } from "../services/labelHierarchyAPI";
+import { fetchAnnotationsForDocument, createAnnotation } from "../services/annotationsAPI";
 
 /* palette for suggested label colors */
 const LABEL_COLORS = [
@@ -23,7 +24,8 @@ export default function DocumentUpload() {
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [annotations, setAnnotations] = useState([]);
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const userId = user?.id;
 
   // NOTE: labels are now managed via labelHierarchy (database labels)
   // We keep this for backward compatibility with the Sidebar's grouped annotations logic
@@ -40,9 +42,14 @@ export default function DocumentUpload() {
   const [selectedParentLabel, setSelectedParentLabel] = useState(null);
   const [isCreatingChild, setIsCreatingChild] = useState(false);
 
+  // Track which documents have had their content loaded to prevent duplicate fetches
+  const loadedDocumentsRef = useRef(new Set());
+  // Track the previous documents length to detect when documents are loaded
+  const prevDocumentsLengthRef = useRef(0);
+
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !userId) return;
 
     (async () => {
       try {
@@ -55,29 +62,42 @@ export default function DocumentUpload() {
         setIsHierarchyLoading(false);
       }
     })();
-  }, [token]);
+  }, [token, userId]);
 
   useEffect(() => {
     if (!token) return;
 
+    console.log("[DOCS] Fetching my documents");
     (async () => {
       try {
         const docs = await fetchMyDocuments(token);
+        console.log("[DOCS] Received", docs.length, "documents from server");
         // docs come from the DB and are already filtered by user_id from the backend
         const mapped = docs.map(d => ({
           id: d.id,
           title: d.title,
           text: "",          // we load it on 'open'
-          annotations: [],   // empty for now (haven't connected annotations to the DB yet)
+          annotations: [],   // ALWAYS start with empty array
         }));
+        
+        // Validate all documents have proper annotations array
+        mapped.forEach((doc, idx) => {
+          if (!Array.isArray(doc.annotations)) {
+            console.warn("[DOCS] Document", idx, "has invalid annotations! Fixing...");
+            doc.annotations = [];
+          }
+        });
+        
+        console.log("[DOCS] Setting documents in state");
         setDocuments(mapped);
 
         // if there are documents - open the first one (not mandatory to have it)
         if (mapped.length && !activeDocId) {
+          console.log("[DOCS] Setting activeDocId to first document:", mapped[0].id);
           setActiveDocId(mapped[0].id);
         }
       } catch (e) {
-        console.error(e);
+        console.error("[DOCS] Error:", e);
       }
     })();
   }, [token]);
@@ -85,23 +105,135 @@ export default function DocumentUpload() {
   useEffect(() => {
     if (!token || !activeDocId) return;
 
-    const doc = documents.find(d => d.id === activeDocId);
-    if (!doc) return;
+    // Trigger loading if documents list just populated and activeDocId is set
+    if (documents.length > prevDocumentsLengthRef.current) {
+      console.log("[TEXT] Documents list updated, checking for text");
+      prevDocumentsLengthRef.current = documents.length;
+    }
 
-    // if we already have text we don't 'draw' again
-    if (doc.text) return;
+    const doc = documents.find(d => d.id === activeDocId);
+    if (!doc) {
+      console.log("[TEXT] Document not found in list");
+      return;
+    }
+
+    // If we already have text, don't fetch again
+    if (doc.text) {
+      console.log("[TEXT] Document already has text");
+      return;
+    }
+
+    // If we're already fetching this doc, don't fetch again
+    if (loadedDocumentsRef.current.has(activeDocId)) {
+      console.log("[TEXT] Document already being fetched");
+      return;
+    }
+
+    console.log("[TEXT] Starting to fetch");
+    loadedDocumentsRef.current.add(activeDocId);
+
+    let isMounted = true;
 
     (async () => {
       try {
+        console.log("[TEXT] Fetching content for doc:", activeDocId);
         const contentResult = await fetchDocumentContent(activeDocId, token);
-        setDocuments(prev =>
-          prev.map(d => d.id === activeDocId ? { ...d, text: contentResult.content } : d)
-        );
+        console.log("[TEXT] Received", contentResult?.content?.length, "characters");
+        // Only update if component is still mounted
+        if (isMounted) {
+          console.log("[TEXT] Updating document state");
+          setDocuments(prev =>
+            prev.map(d => d.id === activeDocId ? { ...d, text: contentResult.content } : d)
+          );
+        } else {
+          console.log("[TEXT] Component unmounted, skipping update");
+        }
       } catch (e) {
-        console.error(e);
+        console.error("[TEXT] Error loading:", e);
+        // Remove from loaded set on error so we can retry
+        loadedDocumentsRef.current.delete(activeDocId);
       }
     })();
-  }, [activeDocId, token, documents]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeDocId, token]);
+
+  // Load annotations for the active document from the database
+  useEffect(() => {
+    if (!token || !activeDocId || !userId) {
+      console.log("[ANN] Skipping - missing token, activeDocId, or userId");
+      return;
+    }
+
+    // Check if document exists
+    const doc = documents.find(d => d.id === activeDocId);
+    if (!doc) {
+      console.log("[ANN] Document not found");
+      return;
+    }
+
+    console.log("[ANN] Starting annotation load for doc:", activeDocId);
+    let isMounted = true;
+
+    (async () => {
+      try {
+        console.log("[ANN] Fetching annotations for doc:", activeDocId, "userId:", userId);
+        let dbAnnotations = await fetchAnnotationsForDocument(activeDocId, userId);
+        
+        // Defensive programming: ensure dbAnnotations is always a valid array
+        if (!Array.isArray(dbAnnotations)) {
+          console.warn("[ANN] ERROR: dbAnnotations is not an array! Got type:", typeof dbAnnotations);
+          console.warn("[ANN] dbAnnotations value:", dbAnnotations);
+          dbAnnotations = [];
+        }
+        
+        // Ensure no undefined/null values in array
+        dbAnnotations = dbAnnotations.filter(a => a !== null && a !== undefined);
+        
+        console.log("[ANN] Got", dbAnnotations.length, "annotations from database");
+        if (dbAnnotations.length > 0) {
+          console.log("[ANN] Annotations:", JSON.stringify(dbAnnotations));
+        } else {
+          console.log("[ANN] No annotations found - result is EMPTY ARRAY (0 annotations)");
+        }
+        
+        if (isMounted) {
+          console.log("[ANN] Updating document state with", dbAnnotations.length, "annotations");
+          setDocuments(prev => {
+            const updated = prev.map(d => {
+              if (d.id === activeDocId) {
+                const newDoc = { ...d, annotations: dbAnnotations };
+                if (!Array.isArray(newDoc.annotations)) {
+                  console.error("[ANN] CRITICAL ERROR: annotations is not an array after setting!");
+                  newDoc.annotations = [];
+                }
+                return newDoc;
+              }
+              return d;
+            });
+            
+            const newDoc = updated.find(d => d.id === activeDocId);
+            console.log("[ANN] After update - doc", activeDocId, "has", newDoc?.text?.length || 0, "chars and", newDoc?.annotations?.length, "annotations");
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.error("[ANN] Error loading annotations:", err);
+        if (isMounted) {
+          console.log("[ANN] Setting annotations to empty array due to error");
+          setDocuments(prev =>
+            prev.map(d => d.id === activeDocId ? { ...d, annotations: [] } : d)
+          );
+        }
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeDocId, token, userId]);
 
   function getNextLabelColor() {
     return LABEL_COLORS[labels.length % LABEL_COLORS.length];
@@ -143,23 +275,82 @@ export default function DocumentUpload() {
   }
 
   // add annotation to the active document (offset-based annotation object)
-  function handleAddAnnotation(a) {
+  async function handleAddAnnotation(a) {
     // a = { id, start, end, text, label, color } or { __reset: true }
     if (!activeDocId) return;
-    setDocuments(prev => prev.map(doc => {
-      if (doc.id !== activeDocId) return doc;
-      if (a && a.__reset) {
-        return { ...doc, annotations: [] };
-      }
-      // check overlap
-      const overlap = doc.annotations.some(an => !(a.end <= an.start || a.start >= an.end));
+    
+    // Handle reset action (clear all annotations)
+    if (a && a.__reset) {
+      setDocuments(prev => prev.map(doc => 
+        doc.id === activeDocId ? { ...doc, annotations: [] } : doc
+      ));
+      return;
+    }
+
+    // Check for overlap
+    const activeDoc = documents.find(d => d.id === activeDocId);
+    if (activeDoc) {
+      const overlap = activeDoc.annotations.some(an => !(a.end <= an.start || a.start >= an.end));
       if (overlap) {
         alert("This selection overlaps an existing annotation. Please select a non-overlapping range.");
-        return doc;
+        return;
       }
-      const nextAnns = [...doc.annotations, a].sort((x, y) => x.start - y.start);
-      return { ...doc, annotations: nextAnns };
-    }));
+    }
+
+    try {
+      // Find the label_id by matching label name with the hierarchy
+      let labelId = null;
+      function findLabelId(labelNode, labelName) {
+        if (labelNode.name === labelName) return labelNode.id;
+        if (labelNode.children) {
+          for (const child of labelNode.children) {
+            const found = findLabelId(child, labelName);
+            if (found) return found;
+          }
+        }
+        return null;
+      }
+
+      for (const label of labelHierarchy) {
+        labelId = findLabelId(label, a.label);
+        if (labelId) break;
+      }
+
+      if (!labelId) {
+        console.error("Label not found:", a.label);
+        alert("Could not find label ID for annotation");
+        return;
+      }
+
+      // Save annotation to database
+      const dbAnnotation = await createAnnotation(
+        activeDocId,
+        labelId,
+        a.start,
+        a.end,
+        a.text,
+        userId
+      );
+
+      // Add to local state with the database ID
+      const annotationWithDbId = {
+        id: dbAnnotation.id,
+        start: a.start,
+        end: a.end,
+        text: a.text,
+        label: a.label,
+        color: a.color
+      };
+
+      setDocuments(prev => prev.map(doc => {
+        if (doc.id !== activeDocId) return doc;
+        const nextAnns = [...doc.annotations, annotationWithDbId].sort((x, y) => x.start - y.start);
+        return { ...doc, annotations: nextAnns };
+      }));
+    } catch (err) {
+      console.error("Error saving annotation:", err);
+      alert(`Failed to save annotation: ${err.message}`);
+    }
   }
 
   // add label to database
@@ -195,16 +386,39 @@ export default function DocumentUpload() {
     return false;
   }
 
-  // close a document tab
-  function closeDocument(docId) {
-    if (!confirm("Close this document? Your annotations for this file will be removed from workspace (they won't be exported).")) return;
-    setDocuments(prev => {
-      const filtered = prev.filter(d => d.id !== docId);
-      if (activeDocId === docId) {
-        setActiveDocId(filtered.length > 0 ? filtered[0].id : null);
+  // close a document tab (deletes from DB)
+  async function closeDocument(docId) {
+    if (!confirm("Delete this document from the database? This cannot be undone.")) return;
+    
+    try {
+      console.log("[DOCS] Deleting document:", docId);
+      const response = await fetch(`http://localhost:3000/api/documents/${docId}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        alert("Failed to delete document from database");
+        return;
       }
-      return filtered;
-    });
+      
+      console.log("[DOCS] Document deleted from DB");
+      // Remove from UI
+      setDocuments(prev => {
+        const filtered = prev.filter(d => d.id !== docId);
+        if (activeDocId === docId) {
+          setActiveDocId(filtered.length > 0 ? filtered[0].id : null);
+        }
+        return filtered;
+      });
+      // Clear from loaded documents set
+      loadedDocumentsRef.current.delete(docId);
+    } catch (err) {
+      console.error("[DOCS] Error deleting document:", err);
+      alert("Error deleting document");
+    }
   }
 
   // Handle adding child label
@@ -219,7 +433,7 @@ export default function DocumentUpload() {
 
     try {
       setIsCreatingChild(true);
-      
+
       
       await createChildLabel(
         selectedParentLabel.id,
@@ -258,6 +472,22 @@ export default function DocumentUpload() {
 
   // helper: get active document object
   const activeDoc = documents.find(d => d.id === activeDocId) || null;
+  
+  // Debug: Log activeDoc state - VERBOSE
+  useEffect(() => {
+    console.log("[RENDER] activeDoc check");
+    console.log("[RENDER]   activeDocId:", activeDocId);
+    console.log("[RENDER]   documents.length:", documents.length);
+    console.log("[RENDER]   activeDoc exists:", !!activeDoc);
+    if (activeDoc) {
+      console.log("[RENDER]   activeDoc.text length:", activeDoc.text?.length || 0);
+      console.log("[RENDER]   activeDoc.annotations type:", typeof activeDoc.annotations);
+      console.log("[RENDER]   activeDoc.annotations is array:", Array.isArray(activeDoc.annotations));
+      console.log("[RENDER]   activeDoc.annotations length:", activeDoc.annotations?.length || "???");
+      console.log("[RENDER]   activeDoc.annotations value:", JSON.stringify(activeDoc.annotations));
+      console.log("[RENDER]   Full activeDoc:", JSON.stringify({id: activeDoc.id, title: activeDoc.title, textLen: activeDoc.text?.length, annotationCount: activeDoc.annotations?.length}));
+    }
+  }, [activeDoc]);
 
   // export all docs metadata (optional)
   function exportAll() {
@@ -378,6 +608,7 @@ export default function DocumentUpload() {
           }}
           labelHierarchy={labelHierarchy}
           onAddChild={handleAddChildClick}
+
           isHierarchyLoading={isHierarchyLoading}
         />
 

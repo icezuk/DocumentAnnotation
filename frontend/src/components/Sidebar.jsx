@@ -59,6 +59,13 @@ export default function Sidebar({
     acc[l.name] = (annotations || []).filter(a => a.label === l.name);
     return acc;
   }, {});
+  
+  // DEBUG: Log what we're getting
+  if (annotations && annotations.length > 0) {
+    console.log("[SIDEBAR] Received annotations:", JSON.stringify(annotations));
+    console.log("[SIDEBAR] Total annotation count:", annotations.length);
+    console.log("[SIDEBAR] Annotations by label:", grouped);
+  }
 
   // totals across docs (if provided)
   const totals = labels.reduce((acc, l) => {
