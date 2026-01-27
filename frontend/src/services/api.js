@@ -21,7 +21,14 @@ export async function uploadDocument(file, token) {
   });
 
   if (!response.ok) {
-    throw new Error("Upload failed");
+    let errorMessage = "Upload failed";
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.error || errorData.message || "Upload failed";
+    } catch (e) {
+      // Response wasn't JSON
+    }
+    throw new Error(errorMessage);
   }
 
   return response.json(); // { id, title, fileType }

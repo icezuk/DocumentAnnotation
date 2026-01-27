@@ -13,9 +13,12 @@ CREATE TABLE labels (
     name VARCHAR(100) NOT NULL,
     color VARCHAR(20),
     description TEXT,
+    user_id INT NOT NULL,
     parent_id INT,
     FOREIGN KEY (parent_id) REFERENCES labels(id)
-        ON DELETE SET NULL
+        ON DELETE SET NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
 );
 CREATE TABLE annotations (
     id INT AUTO_INCREMENT PRIMARY KEY,

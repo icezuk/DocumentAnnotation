@@ -1,9 +1,11 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import DocumentViewer from "./DocumentViewer";
 import Sidebar from "./Sidebar";
+import CreateChildLabelModal from "./CreateChildLabelModal";
 import { uploadDocument, fetchDocumentContent } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { fetchMyDocuments } from "../services/api";
+import { fetchLabelHierarchy, createChildLabel, createLabel } from "../services/labelHierarchyAPI";
 
 /* palette for suggested label colors */
 const LABEL_COLORS = [
@@ -23,18 +25,37 @@ export default function DocumentUpload() {
   const [annotations, setAnnotations] = useState([]);
   const { token } = useAuth();
 
-  // global labels (shared across documents)
-  const [labels, setLabels] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("labels") || "null") || []; } catch { return []; }
-  });
+  // NOTE: labels are now managed via labelHierarchy (database labels)
+  // We keep this for backward compatibility with the Sidebar's grouped annotations logic
+  const [labels, setLabels] = useState([]);
 
   // documents: array of { id, title, text, annotations: [{id,start,end,text,label,color}] }
   const [documents, setDocuments] = useState([]);
   const [activeDocId, setActiveDocId] = useState(null);
 
+  // Label hierarchy state
+  const [labelHierarchy, setLabelHierarchy] = useState([]);
+  const [isHierarchyLoading, setIsHierarchyLoading] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedParentLabel, setSelectedParentLabel] = useState(null);
+  const [isCreatingChild, setIsCreatingChild] = useState(false);
+
+
   useEffect(() => {
-    localStorage.setItem("labels", JSON.stringify(labels));
-  }, [labels]);
+    if (!token) return;
+
+    (async () => {
+      try {
+        setIsHierarchyLoading(true);
+        const hierarchy = await fetchLabelHierarchy(1); // TODO: Get actual user ID from auth context
+        setLabelHierarchy(hierarchy);
+      } catch (err) {
+        console.error("Error loading label hierarchy:", err);
+      } finally {
+        setIsHierarchyLoading(false);
+      }
+    })();
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -117,7 +138,7 @@ export default function DocumentUpload() {
 
     } catch (err) {
       console.error("Upload failed:", err);
-      alert("Failed to upload or load document.");
+      alert(`Failed to upload document: ${err.message}`);
     }
   }
 
@@ -141,16 +162,38 @@ export default function DocumentUpload() {
     }));
   }
 
-  // add global label (keeps same across docs)
-  function handleAddLabel(l) {
+  // add label to database
+  async function handleAddLabel(l) {
     const color = l.color || getNextLabelColor();
-    const labelObj = { ...l, color, id: l.id || makeId("lbl_") };
-    // prevent duplicate names
-    if (labels.some(x => x.name.toLowerCase() === labelObj.name.toLowerCase())) {
-      alert("Label with this name already exists.");
-      return;
+    const name = l.name || l.id;
+    const userId = 1; // TODO: Get from auth context
+    
+    try {
+      // Check if label already exists in hierarchy
+      if (labelHierarchy.some(root => labelExists(root, name.toLowerCase()))) {
+        alert("Label with this name already exists.");
+        return;
+      }
+
+      // Create label in database
+      await createLabel(name, color, userId);
+
+      // Refresh hierarchy
+      const hierarchy = await fetchLabelHierarchy(userId);
+      setLabelHierarchy(hierarchy);
+    } catch (err) {
+      console.error("Error adding label:", err);
+      alert(`Failed to create label: ${err.message}`);
     }
-    setLabels(prev => [...prev, labelObj]);
+  }
+
+  // Helper to check if label exists in hierarchy tree
+  function labelExists(labelNode, nameToFind) {
+    if (labelNode.name.toLowerCase() === nameToFind) return true;
+    if (labelNode.children) {
+      return labelNode.children.some(child => labelExists(child, nameToFind));
+    }
+    return false;
   }
 
   // close a document tab
@@ -158,14 +201,62 @@ export default function DocumentUpload() {
     if (!confirm("Close this document? Your annotations for this file will be removed from workspace (they won't be exported).")) return;
     setDocuments(prev => {
       const filtered = prev.filter(d => d.id !== docId);
-      if (!filtered.length) {
-        setActiveDocId(null);
-      } else if (docId === activeDocId) {
-        setActiveDocId(filtered[filtered.length - 1].id);
+      if (activeDocId === docId) {
+        setActiveDocId(filtered.length > 0 ? filtered[0].id : null);
       }
       return filtered;
     });
   }
+
+  // Handle adding child label
+  function handleAddChildClick(parentLabel) {
+    setSelectedParentLabel(parentLabel);
+    setIsModalOpen(true);
+  }
+
+  // Handle creating child label
+  async function handleCreateChildLabel(childData) {
+    if (!selectedParentLabel) return;
+
+    try {
+      setIsCreatingChild(true);
+      const userId = 1; // TODO: Get actual user ID from auth context
+      
+      await createChildLabel(
+        selectedParentLabel.id,
+        childData.name,
+        childData.color,
+        userId
+      );
+
+      // Refresh hierarchy
+      const hierarchy = await fetchLabelHierarchy(userId);
+      setLabelHierarchy(hierarchy);
+
+      // Close modal
+      setIsModalOpen(false);
+      setSelectedParentLabel(null);
+    } catch (err) {
+      console.error("Error creating child label:", err);
+      alert(`Error: ${err.message}`);
+    } finally {
+      setIsCreatingChild(false);
+    }
+  }
+
+  // Helper to flatten hierarchical labels for the Sidebar's grouped annotations logic
+  // Memoized to prevent unnecessary re-renders of Sidebar
+  const flattenedLabels = useMemo(() => {
+    const flattened = [];
+    function flatten(labelNode) {
+      flattened.push({ id: labelNode.id, name: labelNode.name, color: labelNode.color });
+      if (labelNode.children && labelNode.children.length > 0) {
+        labelNode.children.forEach(child => flatten(child));
+      }
+    }
+    labelHierarchy.forEach(label => flatten(label));
+    return flattened;
+  }, [labelHierarchy]);
 
   // helper: get active document object
   const activeDoc = documents.find(d => d.id === activeDocId) || null;
@@ -265,7 +356,7 @@ export default function DocumentUpload() {
             <DocumentViewer
               key={activeDoc.id}
               text={activeDoc.text}
-              labels={labels}
+              labels={labelHierarchy}
               annotations={activeDoc.annotations}
               onAdd={handleAddAnnotation}
             />
@@ -278,7 +369,7 @@ export default function DocumentUpload() {
 
         {/* Sidebar */}
         <Sidebar
-          labels={labels}
+          labels={flattenedLabels}
           annotations={activeDoc ? activeDoc.annotations : []}
           allAnnotations={documents.flatMap(d => d.annotations)}
           suggestedColor={getNextLabelColor()}
@@ -287,6 +378,23 @@ export default function DocumentUpload() {
             const el = document.querySelector(`[data-annotation-id="${id}"]`);
             if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
           }}
+          labelHierarchy={labelHierarchy}
+          onAddChild={handleAddChildClick}
+          userId={1}
+          isHierarchyLoading={isHierarchyLoading}
+        />
+
+        {/* Create Child Label Modal */}
+        <CreateChildLabelModal
+          isOpen={isModalOpen}
+          parentLabel={selectedParentLabel}
+          onSubmit={handleCreateChildLabel}
+          onClose={() => {
+            setIsModalOpen(false);
+            setSelectedParentLabel(null);
+          }}
+          suggestedColor={getNextLabelColor()}
+          isLoading={isCreatingChild}
         />
       </div>
     </div>
