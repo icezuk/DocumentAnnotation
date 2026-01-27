@@ -13,11 +13,44 @@ import {
 const router = express.Router();
 
 /* =========================
-   GET ALL LABELS
+   IMPORTANT: Routes must be ordered from MOST specific to LEAST specific
+   This ensures /hierarchy/all/:userId matches before //:id
 ========================= */
-router.get("/", async (req, res) => {
+
+/* =========================
+   GET LABEL HIERARCHY (ALL TREES) FOR USER
+========================= */
+router.get("/hierarchy/all/:userId", async (req, res) => {
   try {
-    const [labels] = await db.query("SELECT * FROM labels");
+    const userId = parseInt(req.params.userId);
+    const trees = await getAllRootLabels(userId);
+    res.json(trees);
+  } catch (err) {
+    console.error("Error fetching hierarchy:", err.message);
+    res.status(500).json({ message: "Error fetching hierarchy", error: err.message });
+  }
+});
+
+/* =========================
+   GET LABEL HIERARCHY (ALL TREES) - DEPRECATED
+========================= */
+router.get("/hierarchy/all", async (req, res) => {
+  try {
+    const trees = await getAllRootLabels();
+    res.json(trees);
+  } catch (err) {
+    console.error("Error fetching hierarchy:", err.message);
+    res.status(500).json({ message: "Error fetching hierarchy", error: err.message });
+  }
+});
+
+/* =========================
+   GET ALL LABELS FOR USER
+========================= */
+router.get("/user/:userId", async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    const [labels] = await db.query("SELECT * FROM labels WHERE user_id = ?", [userId]);
     res.json(labels);
   } catch (err) {
     console.error("Error fetching labels:", err.message);
@@ -30,21 +63,26 @@ router.get("/", async (req, res) => {
 ========================= */
 router.post("/", async (req, res) => {
   try {
-    const { name, color } = req.body;
+    const { name, color, user_id } = req.body;
 
     if (!name) {
       return res.status(400).json({ message: "Label name is required" });
     }
 
+    if (!user_id) {
+      return res.status(400).json({ message: "user_id is required" });
+    }
+
     const [result] = await db.query(
-      "INSERT INTO labels (name, color) VALUES (?, ?)",
-      [name, color || null]
+      "INSERT INTO labels (name, color, user_id) VALUES (?, ?, ?)",
+      [name, color || null, user_id]
     );
 
     res.status(201).json({
       id: result.insertId,
       name,
-      color: color || null
+      color: color || null,
+      user_id
     });
   } catch (err) {
     console.error("Error creating label:", err.message);
@@ -53,15 +91,39 @@ router.post("/", async (req, res) => {
 });
 
 /* =========================
-   GET LABEL HIERARCHY (ALL TREES)
+   ADD PARENT-CHILD RELATIONSHIP
 ========================= */
-router.get("/hierarchy/all", async (req, res) => {
+router.post("/:parentId/add-child/:childId/:userId", async (req, res) => {
   try {
-    const trees = await getAllRootLabels();
-    res.json(trees);
+    const parentId = parseInt(req.params.parentId);
+    const childId = parseInt(req.params.childId);
+    const userId = parseInt(req.params.userId);
+    const relationType = req.body.relation_type || "parent_to_child";
+
+    const result = await addParentChild(parentId, childId, userId, relationType);
+    res.status(201).json({
+      message: "Parent-child relationship added",
+      ...result
+    });
   } catch (err) {
-    console.error("Error fetching hierarchy:", err.message);
-    res.status(500).json({ message: "Error fetching hierarchy", error: err.message });
+    console.error("Error adding relationship:", err.message);
+    res.status(400).json({ message: "Error adding relationship", error: err.message });
+  }
+});
+
+/* =========================
+   REMOVE PARENT-CHILD RELATIONSHIP
+========================= */
+router.delete("/:parentId/remove-child/:childId", async (req, res) => {
+  try {
+    const parentId = parseInt(req.params.parentId);
+    const childId = parseInt(req.params.childId);
+
+    const result = await removeParentChild(parentId, childId);
+    res.json(result);
+  } catch (err) {
+    console.error("Error removing relationship:", err.message);
+    res.status(400).json({ message: "Error removing relationship", error: err.message });
   }
 });
 
@@ -116,9 +178,11 @@ router.get("/:id/children", async (req, res) => {
 /* =========================
    GET PATH TO ROOT (BREADCRUMB)
 ========================= */
-router.get("/:id/path", async (req, res) => {
+router.get("/:id/path/:userId", async (req, res) => {
   try {
-    const path = await getPathToRoot(parseInt(req.params.id));
+    const labelId = parseInt(req.params.id);
+    const userId = parseInt(req.params.userId);
+    const path = await getPathToRoot(labelId, userId);
     res.json(path);
   } catch (err) {
     console.error("Error fetching path:", err.message);
@@ -127,38 +191,15 @@ router.get("/:id/path", async (req, res) => {
 });
 
 /* =========================
-   ADD PARENT-CHILD RELATIONSHIP
+   GET ALL LABELS (DEPRECATED - use /user/:userId instead)
 ========================= */
-router.post("/:parentId/add-child/:childId", async (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const parentId = parseInt(req.params.parentId);
-    const childId = parseInt(req.params.childId);
-    const relationType = req.body.relation_type || "parent_to_child";
-
-    const result = await addParentChild(parentId, childId, relationType);
-    res.status(201).json({
-      message: "Parent-child relationship added",
-      ...result
-    });
+    const [labels] = await db.query("SELECT * FROM labels");
+    res.json(labels);
   } catch (err) {
-    console.error("Error adding relationship:", err.message);
-    res.status(400).json({ message: "Error adding relationship", error: err.message });
-  }
-});
-
-/* =========================
-   REMOVE PARENT-CHILD RELATIONSHIP
-========================= */
-router.delete("/:parentId/remove-child/:childId", async (req, res) => {
-  try {
-    const parentId = parseInt(req.params.parentId);
-    const childId = parseInt(req.params.childId);
-
-    const result = await removeParentChild(parentId, childId);
-    res.json(result);
-  } catch (err) {
-    console.error("Error removing relationship:", err.message);
-    res.status(400).json({ message: "Error removing relationship", error: err.message });
+    console.error("Error fetching labels:", err.message);
+    res.status(500).json({ message: "Error fetching labels", error: err.message });
   }
 });
 

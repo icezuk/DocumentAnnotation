@@ -3,24 +3,43 @@ import React, { useEffect, useRef, useState } from "react";
 /*
  Props:
   - text: original document text (string)
-  - labels: [{id, name, color}]
+  - labels: [{id, name, color, children: [...]}] - hierarchical labels from database
   - annotations: [{id, start, end, text, label, color}]
   - onAdd: fn(annotation)  -> expects {id, start, end, text, label, color}
 */
 export default function DocumentViewer({ text = "", labels = [], annotations = [], onAdd }) {
   const containerRef = useRef(null);
-  const [selectedLabelId, setSelectedLabelId] = useState(labels[0]?.id || "");
+  const [selectedLabelId, setSelectedLabelId] = useState("");
   const [html, setHtml] = useState("");
+  const [flatLabels, setFlatLabels] = useState([]);
+
+  // Flatten hierarchical labels into a single array for dropdown
+  useEffect(() => {
+    const flattened = [];
+    function flatten(labelNode) {
+      flattened.push(labelNode);
+      if (labelNode.children && labelNode.children.length > 0) {
+        labelNode.children.forEach(child => flatten(child));
+      }
+    }
+    labels.forEach(label => flatten(label));
+    setFlatLabels(flattened);
+    
+    // Set first label as default (convert to string to match select element value)
+    if (flattened.length > 0 && !selectedLabelId) {
+      setSelectedLabelId(String(flattened[0].id));
+    }
+  }, [labels]);
 
   useEffect(() => {
     setHtml(escapeHtml(text));
   }, [text]);
 
   useEffect(() => {
-    if (!labels.find(l => l.id === selectedLabelId)) {
-      setSelectedLabelId(labels[0]?.id || "");
+    if (flatLabels.length > 0 && !flatLabels.find(l => String(l.id) === selectedLabelId)) {
+      setSelectedLabelId(flatLabels.length > 0 ? String(flatLabels[0].id) : "");
     }
-  }, [labels, selectedLabelId]);
+  }, [flatLabels, selectedLabelId]);
 
   // Build HTML from text + annotations (by offsets). Annotations must be non-overlapping.
   useEffect(() => {
@@ -77,7 +96,7 @@ export default function DocumentViewer({ text = "", labels = [], annotations = [
       return;
     }
 
-    if (!labels || labels.length === 0) {
+    if (!flatLabels || flatLabels.length === 0) {
       alert("Please create at least one label in the sidebar before annotating.");
       sel.removeAllRanges();
       return;
@@ -109,7 +128,7 @@ export default function DocumentViewer({ text = "", labels = [], annotations = [
     const selectedText = text.slice(s, e);
     if (!selectedText.trim()) { sel.removeAllRanges(); return; }
 
-    const labelObj = labels.find(l => l.id === selectedLabelId) || labels[0];
+    const labelObj = flatLabels.find(l => String(l.id) === selectedLabelId) || flatLabels[0];
     if (!labelObj) { sel.removeAllRanges(); return; }
 
     const id = Math.random().toString(36).slice(2, 9);
@@ -133,9 +152,9 @@ export default function DocumentViewer({ text = "", labels = [], annotations = [
       <div className="viewer-controls" style={{ marginBottom: 8 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <label style={{ fontSize: 13, color: "#334155" }}>Label:&nbsp;</label>
-          <select className="label-select" value={selectedLabelId || ""} onChange={e => setSelectedLabelId(e.target.value)} disabled={labels.length === 0}>
-            {labels.length === 0 && <option value="">No labels</option>}
-            {labels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          <select className="label-select" value={selectedLabelId} onChange={e => setSelectedLabelId(e.target.value)} disabled={flatLabels.length === 0}>
+            {flatLabels.length === 0 && <option value="">No labels</option>}
+            {flatLabels.map(l => <option key={l.id} value={String(l.id)}>{l.name}</option>)}
           </select>
         </div>
 

@@ -8,6 +8,10 @@ Props:
   onScrollToAnnotation: fn(id)
   suggestedColor: string
   allAnnotations: array (optional) - across docs (for totals)
+  labelHierarchy: array - hierarchical labels with children
+  onAddChild: fn(parentLabel) - callback when + is clicked on a label
+  userId: number - current user ID
+  isHierarchyLoading: boolean - show loading state
 */
 export default function Sidebar({
   labels = [],
@@ -15,11 +19,16 @@ export default function Sidebar({
   onAddLabel,
   onScrollToAnnotation,
   suggestedColor = "#2563eb",
-  allAnnotations = []
+  allAnnotations = [],
+  labelHierarchy = [],
+  onAddChild,
+  userId,
+  isHierarchyLoading = false
 }) {
   const [name, setName] = useState("");
   const [color, setColor] = useState(suggestedColor);
   const [error, setError] = useState("");
+  const [expandedNodes, setExpandedNodes] = useState(new Set());
 
   useEffect(() => {
     setColor(suggestedColor || "#2563eb");
@@ -57,63 +66,230 @@ export default function Sidebar({
     return acc;
   }, {});
 
-  return (
-    <aside className="sidebar" aria-label="Labels and annotations">
-      <h3 style={{ margin: 0 }}>Labels</h3>
+  // Toggle node expansion
+  function toggleExpand(labelId) {
+    const newExpanded = new Set(expandedNodes);
+    if (newExpanded.has(labelId)) {
+      newExpanded.delete(labelId);
+    } else {
+      newExpanded.add(labelId);
+    }
+    setExpandedNodes(newExpanded);
+  }
 
-      <div style={{ marginTop: 10 }}>
-        {labels.length === 0 && (
-          <div style={{ color: "#64748b", fontSize: 13, marginBottom: 8 }}>
-            No labels yet — create one to start annotating.
+  // Render a single label node in the hierarchy
+  function renderLabelNode(label, level = 0) {
+    const hasChildren = label.children && label.children.length > 0;
+    const isExpanded = expandedNodes.has(label.id);
+    const indent = level * 20; // 20px per level
+    
+    // Get annotations for this label
+    const labelAnnotations = grouped[label.name] || [];
+
+    return (
+      <div key={label.id}>
+        {/* Label row */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 8px",
+            marginLeft: `${indent}px`,
+            marginBottom: 3,
+            borderRadius: 6,
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            fontSize: 13
+          }}
+        >
+          {/* Expand/Collapse Arrow - for both children and annotations */}
+          {(hasChildren || labelAnnotations.length > 0) && (
+            <button
+              onClick={() => toggleExpand(label.id)}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                display: "flex",
+                alignItems: "center",
+                color: "#64748b",
+                fontSize: 12,
+                width: 16,
+                height: 16,
+                minWidth: 16
+              }}
+              title={isExpanded ? "Collapse" : "Expand"}
+            >
+              {isExpanded ? "▼" : "▶"}
+            </button>
+          )}
+          {!hasChildren && labelAnnotations.length === 0 && <div style={{ width: 16 }} />}
+
+          {/* Color indicator */}
+          <div
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: 2,
+              background: label.color || "#94a3b8",
+              border: "1px solid rgba(0,0,0,0.1)",
+              flexShrink: 0
+            }}
+          />
+
+          {/* Label name and count */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 500, color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {label.name}
+            </div>
+            {labelAnnotations.length > 0 && (
+              <div style={{ fontSize: 11, color: "#64748b" }}>
+                {labelAnnotations.length} highlight{labelAnnotations.length !== 1 ? 's' : ''}
+              </div>
+            )}
+          </div>
+
+          {/* Add child button */}
+          {onAddChild && (
+            <button
+              onClick={() => onAddChild(label)}
+              style={{
+                background: "none",
+                border: "1px solid #cbd5e1",
+                borderRadius: 3,
+                cursor: "pointer",
+                padding: "2px 6px",
+                color: "#475569",
+                fontSize: 12,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 20,
+                height: 20,
+                flexShrink: 0,
+                transition: "all 0.2s"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#e2e8f0";
+                e.currentTarget.style.color = "#1e293b";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "none";
+                e.currentTarget.style.color = "#475569";
+              }}
+              title={`Add child label to ${label.name}`}
+            >
+              +
+            </button>
+          )}
+        </div>
+
+        {/* Expanded content: children and annotations */}
+        {isExpanded && (
+          <div>
+            {/* Child labels */}
+            {hasChildren && (
+              <div>
+                {label.children.map((child) => renderLabelNode(child, level + 1))}
+              </div>
+            )}
+
+            {/* Annotations for this label */}
+            {labelAnnotations.length > 0 && (
+              <div style={{ marginLeft: `${indent + 20}px`, marginBottom: 4 }}>
+                <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                  {labelAnnotations.slice(0, 10).map(a => (
+                    <li key={a.id} style={{ marginBottom: 3 }}>
+                      <button 
+                        className="link-like" 
+                        onClick={() => onScrollToAnnotation && onScrollToAnnotation(a.id)} 
+                        style={{ 
+                          background: "none", 
+                          border: "none", 
+                          padding: "2px 4px", 
+                          color: "#2563eb", 
+                          cursor: "pointer", 
+                          textAlign: "left", 
+                          fontSize: 11,
+                          borderRadius: 3,
+                          maxWidth: "100%",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          display: "block"
+                        }}
+                        title={a.text}
+                      >
+                        "{a.text.length > 50 ? a.text.slice(0, 47) + "..." : a.text}"
+                      </button>
+                    </li>
+                  ))}
+                  {labelAnnotations.length > 10 && (
+                    <li style={{ marginTop: 3, color: "#64748b", fontSize: 11 }}>
+                      +{labelAnnotations.length - 10} more...
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
           </div>
         )}
+      </div>
+    );
+  }
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {labels.map(l => (
-            <div key={l.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, borderRadius: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 16, height: 16, borderRadius: 4, background: l.color, border: "1px solid rgba(0,0,0,0.06)" }} />
-                <div>
-                  <div style={{ fontWeight: 600 }}>{l.name}</div>
-                  <div style={{ fontSize: 13, color: "#64748b" }}>{(grouped[l.name] || []).length} highlights (total: {totals[l.name] || 0})</div>
-                </div>
-              </div>
-              <div style={{ fontSize: 12, color: "#64748b" }}></div>
-            </div>
-          ))}
+  return (
+    <aside className="sidebar" aria-label="Labels">
+      <h3 style={{ margin: 0 }}>Labels</h3>
+
+      {/* Add new label section */}
+      <div style={{ marginTop: 12, paddingBottom: 12, borderBottom: "1px solid #e2e8f0" }}>
+        <div style={{ fontSize: 12, color: "#475569", marginBottom: 8 }}>Add new label</div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input 
+            aria-label="Label name" 
+            type="text" 
+            placeholder="Label name" 
+            value={name} 
+            onChange={e => setName(e.target.value)} 
+            onKeyPress={(e) => {
+              if (e.key === "Enter") {
+                handleAdd();
+              }
+            }}
+            style={{ flex: 1, padding: 6, borderRadius: 6, border: "1px solid #e2e8f0", fontSize: 13 }} 
+          />
+          <input 
+            aria-label="Choose color" 
+            type="color" 
+            value={color} 
+            onChange={e => setColor(e.target.value)} 
+            style={{ width: 36, height: 32, borderRadius: 6, padding: 2, border: "1px solid #e2e8f0", background: "white", cursor: "pointer" }} 
+          />
+          <button onClick={handleAdd} className="btn" style={{ borderRadius: 6, padding: "6px 12px", fontSize: 13 }}>Add</button>
         </div>
+        {error && <div style={{ color: "#dc2626", marginTop: 6, fontSize: 12 }}>{error}</div>}
       </div>
 
-      <div style={{ height: 8 }} />
-
-      <div style={{ fontSize: 13, color: "#475569" }}>Add new label</div>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
-        <input aria-label="Label name" type="text" placeholder="Label name" value={name} onChange={e => setName(e.target.value)} style={{ flex: 1, padding: 8, borderRadius: 8, border: "1px solid #e6e9ef" }} />
-        <input aria-label="Choose color" type="color" value={color} onChange={e => setColor(e.target.value)} style={{ width: 44, height: 36, borderRadius: 8, padding: 3, border: "1px solid #e6e9ef", background: "white" }} />
-        <button onClick={handleAdd} className="btn" style={{ borderRadius: 8 }}>Add</button>
-      </div>
-
-      {error && <div style={{ color: "#dc2626", marginTop: 8 }}>{error}</div>}
-
-      <div style={{ marginTop: 12 }} className="label-group">
-        {labels.map(l => (
-          <div key={`group-${l.id}`} style={{ marginBottom: 10 }}>
-            <h4 style={{ margin: "0 0 6px 0", display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ width: 12, height: 12, background: l.color, display: "inline-block", borderRadius: 4 }} />
-              {l.name}
-            </h4>
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {(grouped[l.name] || []).slice(0, 20).map(a => (
-                <li key={a.id} style={{ marginBottom: 6 }}>
-                  <button className="link-like" onClick={() => onScrollToAnnotation && onScrollToAnnotation(a.id)} style={{ background: "none", border: "none", padding: 0, color: "#2563eb", cursor: "pointer", textAlign: "left" }}>
-                    {a.text.length > 80 ? a.text.slice(0, 77) + "..." : a.text}
-                  </button>
-                </li>
-              ))}
-              {(grouped[l.name] || []).length === 0 && <li style={{ color: "#8892a6" }}>— none —</li>}
-            </ul>
+      {/* Unified Labels section - combines hierarchy, creation, and annotations */}
+      <div style={{ marginTop: 12 }}>
+        <h4 style={{ margin: "0 0 8px 0", fontSize: 12, color: "#475569" }}>Your Labels</h4>
+        
+        {isHierarchyLoading ? (
+          <div style={{ padding: 8, color: "#64748b", fontSize: 12 }}>
+            Loading labels...
           </div>
-        ))}
+        ) : labelHierarchy && labelHierarchy.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {labelHierarchy.map((label) => renderLabelNode(label, 0))}
+          </div>
+        ) : (
+          <div style={{ padding: 8, color: "#64748b", fontSize: 12 }}>
+            No labels yet. Create one above!
+          </div>
+        )}
       </div>
     </aside>
   );

@@ -41,10 +41,32 @@ export async function getDirectParent(childId) {
 
 /**
  * Check if a child can be added (must not already have a parent)
+ * Also validates both labels belong to the same user
  */
-export async function canAddChild(parentId, childId) {
+export async function canAddChild(parentId, childId, userId) {
   if (parentId === childId) {
     return { valid: false, error: "A label cannot be its own parent" };
+  }
+
+  // Verify both labels belong to the same user
+  try {
+    const [parentLabel] = await db.query(
+      "SELECT id, user_id FROM labels WHERE id = ? AND user_id = ?",
+      [parentId, userId]
+    );
+    const [childLabel] = await db.query(
+      "SELECT id, user_id FROM labels WHERE id = ? AND user_id = ?",
+      [childId, userId]
+    );
+
+    if (parentLabel.length === 0) {
+      return { valid: false, error: `Parent label ${parentId} not found or does not belong to user ${userId}` };
+    }
+    if (childLabel.length === 0) {
+      return { valid: false, error: `Child label ${childId} not found or does not belong to user ${userId}` };
+    }
+  } catch (err) {
+    return { valid: false, error: `Error validating labels: ${err.message}` };
   }
 
   // Check if child already has a parent
@@ -77,11 +99,12 @@ export async function isAncestor(potentialAncestorId, labelId) {
 
 /**
  * Add parent-child relationship
+ * Validates both labels belong to the same user
  */
-export async function addParentChild(parentId, childId, relationType = "parent_to_child") {
+export async function addParentChild(parentId, childId, userId, relationType = "parent_to_child") {
   try {
     // Validate can add
-    const canAdd = await canAddChild(parentId, childId);
+    const canAdd = await canAddChild(parentId, childId, userId);
     if (!canAdd.valid) {
       throw new Error(canAdd.error);
     }
@@ -189,12 +212,15 @@ export async function buildLabelTree(labelId) {
 }
 
 /**
- * Get all root labels (labels with no parent)
+ * Get all root labels (labels with no parent) for a specific user
  */
-export async function getAllRootLabels() {
+export async function getAllRootLabels(userId) {
   try {
-    // Get all labels
-    const [allLabels] = await db.query("SELECT * FROM labels");
+    // Get all labels for the user
+    const [allLabels] = await db.query(
+      "SELECT * FROM labels WHERE user_id = ?",
+      [userId]
+    );
 
     // Filter labels that don't have a parent
     const rootLabels = [];
@@ -219,13 +245,16 @@ export async function getAllRootLabels() {
 /**
  * Get path from label to root (breadcrumb)
  */
-export async function getPathToRoot(labelId) {
+export async function getPathToRoot(labelId, userId) {
   const path = [];
   let currentId = labelId;
 
   try {
     while (currentId !== null) {
-      const [rows] = await db.query("SELECT id, name FROM labels WHERE id = ?", [currentId]);
+      const [rows] = await db.query(
+        "SELECT id, name FROM labels WHERE id = ? AND user_id = ?",
+        [currentId, userId]
+      );
       if (rows.length === 0) break;
 
       path.unshift({ id: rows[0].id, name: rows[0].name });
