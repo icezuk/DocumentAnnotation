@@ -1,11 +1,14 @@
 import express from "express";
 import multer from "multer";
-import * as pdfParse from "pdf-parse";
+//import * as pdfParse from "pdf-parse";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import mammoth from "mammoth";
 import fs from "fs";
 import path from "path";
 import { db } from "../db.js";
 import { authMiddleware } from "../middleware/auth.middleware.js";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
 
 const router = express.Router();
 
@@ -60,7 +63,7 @@ router.get("/", authMiddleware, async (req, res) => {
 router.post("/upload", authMiddleware, upload.single("file"), async (req, res) => {
   try {
     const userId = req.user.id;
-    
+
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
@@ -78,10 +81,25 @@ router.post("/upload", authMiddleware, upload.single("file"), async (req, res) =
 
     } else if (fileType === "pdf") {
       const dataBuffer = fs.readFileSync(filePath);
-      const pdfData = await pdfParse(dataBuffer);
-      extractedContent = pdfData.text;
-      // clear the text from empty rows and unnecessary intervals
-      extractedContent = extractedContent.replace(/\s+\n/g, "\n").trim();
+      const uint8Array = new Uint8Array(dataBuffer);
+
+      const loadingTask = pdfjsLib.getDocument({
+        data: uint8Array,
+        useSystemFonts: true,
+      });
+
+      const pdf = await loadingTask.promise;
+
+      let text = "";
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const content = await page.getTextContent();
+        const pageText = content.items.map(item => item.str).join(" ");
+        text += pageText + "\n";
+      }
+
+      extractedContent = text;
 
     } else if (fileType === "docx") {
       const result = await mammoth.extractRawText({ path: filePath });
