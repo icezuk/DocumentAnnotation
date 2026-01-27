@@ -109,6 +109,22 @@ export async function addParentChild(parentId, childId, userId, relationType = "
       throw new Error(canAdd.error);
     }
 
+    // check if parent/child belong to the user
+    const [[parent]] = await db.query(
+      "SELECT id FROM labels WHERE id = ? AND user_id = ?",
+      [parentId, userId]
+    );
+
+    const [[child]] = await db.query(
+      "SELECT id FROM labels WHERE id = ? AND user_id = ?",
+      [childId, userId]
+    );
+
+    if (!parent || !child) {
+      throw new Error("Unauthorized label relation");
+    }
+
+
     // Check for circular references
     const isCircular = await isAncestor(childId, parentId);
     if (isCircular) {

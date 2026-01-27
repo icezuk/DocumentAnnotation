@@ -1,6 +1,6 @@
 import express from "express";
 import multer from "multer";
-import * as pdfParse from "pdf-parse";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import mammoth from "mammoth";
 import fs from "fs";
 import path from "path";

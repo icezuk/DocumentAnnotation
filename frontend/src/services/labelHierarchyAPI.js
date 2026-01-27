@@ -1,86 +1,76 @@
 const BASE_URL = "http://localhost:3000/api";
 
 /**
- * Fetch label hierarchy for a user
+ * Fetch label hierarchy (for the logged-in user)
  */
-export async function fetchLabelHierarchy(userId) {
-  try {
-    const response = await fetch(`${BASE_URL}/labels/hierarchy/all/${userId}`);
-    if (!response.ok) {
-      throw new Error("Failed to fetch label hierarchy");
+export async function fetchLabelHierarchy(token) {
+  const response = await fetch(`${BASE_URL}/labels/hierarchy/all`, {
+    headers: {
+      Authorization: `Bearer ${token}`
     }
-    return await response.json();
-  } catch (err) {
-    console.error("Error fetching label hierarchy:", err);
-    throw err;
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch label hierarchy");
   }
+
+  return response.json();
 }
 
 /**
- * Create a new label
+ * Create a new root label
  */
-export async function createLabel(name, color, userId) {
-  try {
-    const response = await fetch(`${BASE_URL}/labels`, {
+export async function createLabel(data, token) {
+  const response = await fetch(`${BASE_URL}/labels`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(data) // { name, color }
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to create label");
+  }
+
+  return response.json();
+}
+
+/**
+ * Create parent-child relationship
+ */
+export async function addParentChildRelationship(parentId, childId, token) {
+  const response = await fetch(
+    `${BASE_URL}/labels/${parentId}/add-child/${childId}`,
+    {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, color, user_id: userId })
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "Failed to create label");
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ relation_type: "parent_to_child" })
     }
+  );
 
-    return await response.json();
-  } catch (err) {
-    console.error("Error creating label:", err);
-    throw err;
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to add parent-child relationship");
   }
+
+  return response.json();
 }
 
 /**
- * Create a parent-child relationship between two labels
- * This makes childId a child of parentId
+ * Create a child label under a parent label
  */
-export async function addParentChildRelationship(parentId, childId, userId) {
-  try {
-    const response = await fetch(
-      `${BASE_URL}/labels/${parentId}/add-child/${childId}/${userId}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ relation_type: "parent_to_child" })
-      }
-    );
+export async function createChildLabel(parentId, data, token) {
+  // 1. create label
+  const newLabel = await createLabel(data, token);
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "Failed to add parent-child relationship");
-    }
+  // 2. link it as child
+  await addParentChildRelationship(parentId, newLabel.id, token);
 
-    return await response.json();
-  } catch (err) {
-    console.error("Error adding parent-child relationship:", err);
-    throw err;
-  }
-}
-
-/**
- * Create a new child label under a parent label
- * This is a convenience function that does both createLabel and addParentChildRelationship
- */
-export async function createChildLabel(parentId, childName, childColor, userId) {
-  try {
-    // First, create the child label
-    const newLabel = await createLabel(childName, childColor, userId);
-
-    // Then, create the parent-child relationship
-    await addParentChildRelationship(parentId, newLabel.id, userId);
-
-    return newLabel;
-  } catch (err) {
-    console.error("Error creating child label:", err);
-    throw err;
-  }
+  return newLabel;
 }

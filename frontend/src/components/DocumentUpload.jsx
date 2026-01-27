@@ -47,7 +47,7 @@ export default function DocumentUpload() {
     (async () => {
       try {
         setIsHierarchyLoading(true);
-        const hierarchy = await fetchLabelHierarchy(1); // TODO: Get actual user ID from auth context
+        const hierarchy = await fetchLabelHierarchy(token); // TODO: Get actual user ID from auth context
         setLabelHierarchy(hierarchy);
       } catch (err) {
         console.error("Error loading label hierarchy:", err);
@@ -166,7 +166,6 @@ export default function DocumentUpload() {
   async function handleAddLabel(l) {
     const color = l.color || getNextLabelColor();
     const name = l.name || l.id;
-    const userId = 1; // TODO: Get from auth context
     
     try {
       // Check if label already exists in hierarchy
@@ -176,10 +175,10 @@ export default function DocumentUpload() {
       }
 
       // Create label in database
-      await createLabel(name, color, userId);
+      await createLabel({name, color}, token);
 
       // Refresh hierarchy
-      const hierarchy = await fetchLabelHierarchy(userId);
+      const hierarchy = await fetchLabelHierarchy(token);
       setLabelHierarchy(hierarchy);
     } catch (err) {
       console.error("Error adding label:", err);
@@ -220,17 +219,16 @@ export default function DocumentUpload() {
 
     try {
       setIsCreatingChild(true);
-      const userId = 1; // TODO: Get actual user ID from auth context
+      
       
       await createChildLabel(
         selectedParentLabel.id,
-        childData.name,
-        childData.color,
-        userId
+        {name: childData.name, color: childData.color},
+        token
       );
 
       // Refresh hierarchy
-      const hierarchy = await fetchLabelHierarchy(userId);
+      const hierarchy = await fetchLabelHierarchy(token);
       setLabelHierarchy(hierarchy);
 
       // Close modal
@@ -380,7 +378,6 @@ export default function DocumentUpload() {
           }}
           labelHierarchy={labelHierarchy}
           onAddChild={handleAddChildClick}
-          userId={1}
           isHierarchyLoading={isHierarchyLoading}
         />
 

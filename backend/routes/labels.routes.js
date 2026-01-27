@@ -9,6 +9,7 @@ import {
   getAllRootLabels,
   getPathToRoot
 } from "../labelHierarchy.js";
+import { authMiddleware } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
@@ -20,9 +21,9 @@ const router = express.Router();
 /* =========================
    GET LABEL HIERARCHY (ALL TREES) FOR USER
 ========================= */
-router.get("/hierarchy/all/:userId", async (req, res) => {
+router.get("/hierarchy/all", authMiddleware, async (req, res) => {
   try {
-    const userId = parseInt(req.params.userId);
+    const userId = req.user.id;
     const trees = await getAllRootLabels(userId);
     res.json(trees);
   } catch (err) {
@@ -34,22 +35,22 @@ router.get("/hierarchy/all/:userId", async (req, res) => {
 /* =========================
    GET LABEL HIERARCHY (ALL TREES) - DEPRECATED
 ========================= */
-router.get("/hierarchy/all", async (req, res) => {
-  try {
-    const trees = await getAllRootLabels();
-    res.json(trees);
-  } catch (err) {
-    console.error("Error fetching hierarchy:", err.message);
-    res.status(500).json({ message: "Error fetching hierarchy", error: err.message });
-  }
-});
+// router.get("/hierarchy/all", async (req, res) => {
+//   try {
+//     const trees = await getAllRootLabels();
+//     res.json(trees);
+//   } catch (err) {
+//     console.error("Error fetching hierarchy:", err.message);
+//     res.status(500).json({ message: "Error fetching hierarchy", error: err.message });
+//   }
+// });
 
 /* =========================
    GET ALL LABELS FOR USER
 ========================= */
-router.get("/user/:userId", async (req, res) => {
+router.get("/user", authMiddleware, async (req, res) => {
   try {
-    const userId = parseInt(req.params.userId);
+    const userId = req.user.id;
     const [labels] = await db.query("SELECT * FROM labels WHERE user_id = ?", [userId]);
     res.json(labels);
   } catch (err) {
@@ -61,28 +62,25 @@ router.get("/user/:userId", async (req, res) => {
 /* =========================
    CREATE NEW LABEL
 ========================= */
-router.post("/", async (req, res) => {
+router.post("/", authMiddleware, async (req, res) => {
   try {
-    const { name, color, user_id } = req.body;
+    const userId = req.user.id;
+    const { name, color} = req.body;
 
     if (!name) {
       return res.status(400).json({ message: "Label name is required" });
     }
 
-    if (!user_id) {
-      return res.status(400).json({ message: "user_id is required" });
-    }
-
     const [result] = await db.query(
       "INSERT INTO labels (name, color, user_id) VALUES (?, ?, ?)",
-      [name, color || null, user_id]
+      [name, color || null, userId]
     );
 
     res.status(201).json({
       id: result.insertId,
       name,
       color: color || null,
-      user_id
+      user_id: userId
     });
   } catch (err) {
     console.error("Error creating label:", err.message);
@@ -93,11 +91,11 @@ router.post("/", async (req, res) => {
 /* =========================
    ADD PARENT-CHILD RELATIONSHIP
 ========================= */
-router.post("/:parentId/add-child/:childId/:userId", async (req, res) => {
+router.post("/:parentId/add-child/:childId", authMiddleware, async (req, res) => {
   try {
     const parentId = parseInt(req.params.parentId);
     const childId = parseInt(req.params.childId);
-    const userId = parseInt(req.params.userId);
+    const userId = req.user.id;
     const relationType = req.body.relation_type || "parent_to_child";
 
     const result = await addParentChild(parentId, childId, userId, relationType);
@@ -178,10 +176,10 @@ router.get("/:id/children", async (req, res) => {
 /* =========================
    GET PATH TO ROOT (BREADCRUMB)
 ========================= */
-router.get("/:id/path/:userId", async (req, res) => {
+router.get("/:id/path", authMiddleware, async (req, res) => {
   try {
     const labelId = parseInt(req.params.id);
-    const userId = parseInt(req.params.userId);
+    const userId = req.user.id;
     const path = await getPathToRoot(labelId, userId);
     res.json(path);
   } catch (err) {
@@ -193,9 +191,12 @@ router.get("/:id/path/:userId", async (req, res) => {
 /* =========================
    GET ALL LABELS (DEPRECATED - use /user/:userId instead)
 ========================= */
-router.get("/", async (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
   try {
-    const [labels] = await db.query("SELECT * FROM labels");
+    const userId = req.user.id;
+    const [labels] = await db.query("SELECT * FROM labels WHERE user_id = ?",
+      [userId]
+    );
     res.json(labels);
   } catch (err) {
     console.error("Error fetching labels:", err.message);
