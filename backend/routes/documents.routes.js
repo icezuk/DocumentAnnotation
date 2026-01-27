@@ -5,6 +5,7 @@ import mammoth from "mammoth";
 import fs from "fs";
 import path from "path";
 import { db } from "../db.js";
+import { authMiddleware } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
@@ -38,9 +39,14 @@ const upload = multer({ storage, fileFilter });
 /* =========================
    GET ALL DOCUMENTS
 ========================= */
-router.get("/", async (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
+  const userId = req.user.id;
+
   try {
-    const [rows] = await db.query("SELECT * FROM documents");
+    const [rows] = await db.query(
+      "SELECT * FROM documents WHERE user_id = ?",
+      [userId]
+    );
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -51,8 +57,10 @@ router.get("/", async (req, res) => {
 /* =========================
    UPLOAD DOCUMENT
 ========================= */
-router.post("/upload", upload.single("file"), async (req, res) => {
+router.post("/upload", authMiddleware, upload.single("file"), async (req, res) => {
   try {
+    const userId = req.user.id;
+    
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
@@ -94,9 +102,9 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 
     // Insert into the DB
     const [result] = await db.query(
-      `INSERT INTO documents (title, content, file_type)
-       VALUES (?, ?, ?)`,
-      [originalname, extractedContent, fileType]
+      `INSERT INTO documents (title, content, file_type, user_id)
+       VALUES (?, ?, ?, ?)`,
+      [originalname, extractedContent, fileType, userId]
     );
 
     res.status(201).json({
@@ -114,10 +122,13 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 /* =========================
    GET DOCUMENT CONTENT 
 ========================= */
-router.get("/:id/content", async (req, res) => {
+router.get("/:id/content", authMiddleware, async (req, res) => {
+  const userId = req.user.id;
+  const docId = req.params.id;
+
   const [rows] = await db.query(
-    "SELECT content FROM documents WHERE id = ?",
-    [req.params.id]
+    "SELECT content FROM documents WHERE id = ? AND user_id = ?",
+    [docId, userId]
   );
 
   if (rows.length === 0) {

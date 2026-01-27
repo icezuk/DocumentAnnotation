@@ -2,6 +2,8 @@ import React, { useRef, useState, useEffect } from "react";
 import DocumentViewer from "./DocumentViewer";
 import Sidebar from "./Sidebar";
 import { uploadDocument, fetchDocumentContent } from "../services/api";
+import { useAuth } from "../context/AuthContext";
+import { fetchMyDocuments } from "../services/api";
 
 /* palette for suggested label colors */
 const LABEL_COLORS = [
@@ -19,6 +21,7 @@ export default function DocumentUpload() {
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [annotations, setAnnotations] = useState([]);
+  const { token } = useAuth();
 
   // global labels (shared across documents)
   const [labels, setLabels] = useState(() => {
@@ -32,6 +35,52 @@ export default function DocumentUpload() {
   useEffect(() => {
     localStorage.setItem("labels", JSON.stringify(labels));
   }, [labels]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    (async () => {
+      try {
+        const docs = await fetchMyDocuments(token);
+        // docs come from the DB and are already filtered by user_id from the backend
+        const mapped = docs.map(d => ({
+          id: d.id,
+          title: d.title,
+          text: "",          // we load it on 'open'
+          annotations: [],   // empty for now (haven't connected annotations to the DB yet)
+        }));
+        setDocuments(mapped);
+
+        // if there are documents - open the first one (not mandatory to have it)
+        if (mapped.length && !activeDocId) {
+          setActiveDocId(mapped[0].id);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  }, [token]);
+
+  useEffect(() => {
+    if (!token || !activeDocId) return;
+
+    const doc = documents.find(d => d.id === activeDocId);
+    if (!doc) return;
+
+    // if we already have text we don't 'draw' again
+    if (doc.text) return;
+
+    (async () => {
+      try {
+        const contentResult = await fetchDocumentContent(activeDocId, token);
+        setDocuments(prev =>
+          prev.map(d => d.id === activeDocId ? { ...d, text: contentResult.content } : d)
+        );
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  }, [activeDocId, token, documents]);
 
   function getNextLabelColor() {
     return LABEL_COLORS[labels.length % LABEL_COLORS.length];
@@ -49,10 +98,10 @@ export default function DocumentUpload() {
 
     try {
       // upload to backend
-      const uploadResult = await uploadDocument(f);
+      const uploadResult = await uploadDocument(f, token);
 
       // get content from backend
-      const contentResult = await fetchDocumentContent(uploadResult.id);
+      const contentResult = await fetchDocumentContent(uploadResult.id, token);
 
       // create document object
       const newDoc = {

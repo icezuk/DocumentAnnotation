@@ -1,0 +1,26 @@
+USE annotation_tool_db;
+
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE documents
+ADD COLUMN user_id INT NOT NULL,
+ADD CONSTRAINT fk_documents_user
+FOREIGN KEY (user_id) REFERENCES users(id)
+ON DELETE CASCADE;
+
+ALTER TABLE labels
+ADD COLUMN user_id INT NOT NULL,
+ADD CONSTRAINT fk_labels_user
+FOREIGN KEY (user_id) REFERENCES users(id)
+ON DELETE CASCADE;
+
+ALTER TABLE annotations
+ADD COLUMN user_id INT NOT NULL,
+ADD CONSTRAINT fk_annotations_user
+FOREIGN KEY (user_id) REFERENCES users(id)
+ON DELETE CASCADE;
